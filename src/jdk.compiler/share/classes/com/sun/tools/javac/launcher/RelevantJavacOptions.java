@@ -48,10 +48,11 @@ record RelevantJavacOptions(List<String> forProgramCompilation,
      * Generally, the relevant options are those for setting paths and for configuring the
      * module system.
      *
+     * @param program the program descriptor
      * @param runtimeArgs the runtime arguments
      * @return the subset of the runtime arguments
      */
-    static RelevantJavacOptions of(String... runtimeArgs) throws Fault {
+    static RelevantJavacOptions of(ProgramDescriptor program, String... runtimeArgs) throws Fault {
         var programOptions = new ArrayList<String>();
         var subsequentOptions = new ArrayList<String>();
 
@@ -92,10 +93,12 @@ record RelevantJavacOptions(List<String> forProgramCompilation,
                         }
                         value = runtimeArgs[++i];
                     }
-                    if (opt.equals("--add-modules") && value.equals("ALL-DEFAULT")) {
-                        // this option is only supported at run time;
-                        // it is not required or supported at compile time
-                        break;
+                    if (opt.equals("--add-modules")) {
+                        var modules = computeListOfAddModules(program, value);
+                        if (modules.isEmpty()) {
+                            break;
+                        }
+                        value = String.join(",", modules);
                     }
                     programOptions.add(opt);
                     programOptions.add(value);
@@ -141,5 +144,21 @@ record RelevantJavacOptions(List<String> forProgramCompilation,
                 });
 
         return new RelevantJavacOptions(List.copyOf(programOptions), List.copyOf(subsequentOptions));
+    }
+
+    private static List<String> computeListOfAddModules(ProgramDescriptor program, String value) {
+        var modules = new ArrayList<>(List.of(value.split(",")));
+        // these options are only supported at run time;
+        // they are not required or supported at compile time
+        modules.remove("ALL-DEFAULT");
+        modules.remove("ALL-SYSTEM");
+
+        // ALL-MODULE-PATH can only be used when compiling the
+        // unnamed module or when compiling in the context of
+        // an automatic module
+        if (program.isModular()) {
+            modules.remove("ALL-MODULE-PATH");
+        }
+        return modules;
     }
 }

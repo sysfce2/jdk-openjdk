@@ -144,8 +144,9 @@ public final class SourceLauncher {
     public Result run(String[] runtimeArgs, String[] args) throws Fault, InvocationTargetException {
         Path file = getFile(args);
 
-        RelevantJavacOptions options = RelevantJavacOptions.of(runtimeArgs);
-        MemoryContext context = new MemoryContext(out, file, options);
+        ProgramDescriptor program = ProgramDescriptor.of(file);
+        RelevantJavacOptions options = RelevantJavacOptions.of(program, runtimeArgs);
+        MemoryContext context = new MemoryContext(out, program, options);
         String mainClassName = context.compileProgram();
 
         String[] mainArgs = Arrays.copyOfRange(args, 1, args.length);

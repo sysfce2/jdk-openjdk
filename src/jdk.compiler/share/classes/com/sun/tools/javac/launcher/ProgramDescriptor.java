@@ -83,6 +83,10 @@ public record ProgramDescriptor(Path sourceFilePath, Optional<String> packageNam
         throw new RuntimeException("Package " + packageName + " does match path ending: " + ending);
     }
 
+    public boolean isModular() {
+        return Files.exists(sourceRootPath.resolve("module-info.java"));
+    }
+
     public Set<String> computePackageNames() {
         try (var stream = Files.find(sourceRootPath, 99, (path, attr) -> attr.isDirectory())) {
             var names = new TreeSet<String>();

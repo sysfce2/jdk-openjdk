@@ -44,7 +44,6 @@ import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -75,10 +74,10 @@ final class MemoryContext {
 
     private final Map<String, byte[]> inMemoryClasses = new HashMap<>();
 
-    MemoryContext(PrintWriter out, Path file, RelevantJavacOptions options) throws Fault {
+    MemoryContext(PrintWriter out, ProgramDescriptor descriptor, RelevantJavacOptions options) throws Fault {
         this.out = out;
-        this.descriptor = ProgramDescriptor.of(file);
-        this.program = ProgramFileObject.of(file);
+        this.descriptor = descriptor;
+        this.program = ProgramFileObject.of(descriptor.sourceFilePath());
         this.options = options;
 
         this.compiler = JavacTool.create();
@@ -111,9 +110,9 @@ final class MemoryContext {
     String compileProgram() throws Fault {
         var units = new ArrayList<JavaFileObject>();
         units.add(program);
-        var moduleDeclaration = descriptor.sourceRootPath().resolve("module-info.java");
-        if (Files.exists(moduleDeclaration)) {
-            units.add(standardFileManager.getJavaFileObject(moduleDeclaration));
+        if (descriptor.isModular()) {
+            var root = descriptor.sourceRootPath();
+            units.add(standardFileManager.getJavaFileObject(root.resolve("module-info.java")));
         }
         var opts = options.forProgramCompilation();
         var task = compiler.getTask(out, memoryFileManager, null, opts, null, units);

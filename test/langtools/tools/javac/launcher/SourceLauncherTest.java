@@ -623,7 +623,7 @@ public class SourceLauncherTest extends TestRunner {
     public void testNoOptionsWarnings(Path base) throws IOException {
         tb.writeJavaFiles(base, "public class Main { public static void main(String... args) {}}");
         String log = new JavaTask(tb)
-                .vmOptions("--source", "8")
+                .vmOptions("--source", "21")
                 .className(base.resolve("Main.java").toString())
                 .run(Task.Expect.SUCCESS)
                 .getOutput(Task.OutputKind.STDERR);
