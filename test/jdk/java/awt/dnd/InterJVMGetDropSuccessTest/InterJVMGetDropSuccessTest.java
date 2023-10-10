@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -265,7 +265,9 @@ class Child {
             Point targetPoint = new Point(x + w / 2, y + h / 2);
 
             Robot robot = new Robot();
+            robot.setAutoWaitForIdle(true);
             robot.mouseMove(sourcePoint.x, sourcePoint.y);
+            Thread.sleep(50);
             robot.mousePress(InputEvent.BUTTON1_MASK);
             for (Point p = new Point(sourcePoint); !p.equals(targetPoint);
                  p.translate(Util.sign(targetPoint.x - p.x),
@@ -287,6 +289,7 @@ class Child {
 
             dragSourceListener.reset();
             robot.mouseMove(sourcePoint.x, sourcePoint.y);
+            Thread.sleep(50);
             robot.mousePress(InputEvent.BUTTON1_MASK);
             for (Point p = new Point(sourcePoint); !p.equals(targetPoint);
                  p.translate(Util.sign(targetPoint.x - p.x),
