@@ -297,10 +297,18 @@ public class SourceLauncherTest extends TestRunner {
 
     @Test
     public void testNoClass(Path base) throws IOException {
-        Files.createDirectories(base);
-        Path file = base.resolve("NoClass.java");
+        var path = Files.createDirectories(base.resolve("p"));
+        Path file = path.resolve("NoClass.java");
         Files.write(file, List.of("package p;"));
         testError(file, "", "error: no class declared in source file");
+    }
+
+    @Test
+    public void testMismatchOfPathAndPackage(Path base) throws IOException {
+        Files.createDirectories(base);
+        Path file = base.resolve("MismatchOfPathAndPackage.java");
+        Files.write(file, List.of("package p;"));
+        testError(file, "", "error: end of path to source file does not match its package name p: " + file);
     }
 
     @Test

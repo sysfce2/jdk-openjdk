@@ -93,7 +93,7 @@ final class MemoryClassLoader extends ClassLoader {
         this.sourceFileClasses = sourceFileClasses;
         CodeSource codeSource;
         try {
-            codeSource = new CodeSource(programDescriptor.sourceFilePath().toUri().toURL(), (CodeSigner[])null);
+            codeSource = new CodeSource(programDescriptor.fileObject().getFile().toUri().toURL(), (CodeSigner[])null);
         } catch (MalformedURLException e) {
             codeSource = null;
         }

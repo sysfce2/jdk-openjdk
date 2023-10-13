@@ -26,6 +26,8 @@
 package com.sun.tools.javac.launcher;
 
 import com.sun.tools.javac.api.JavacTool;
+import com.sun.tools.javac.resources.LauncherProperties.Errors;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -43,36 +45,40 @@ import java.util.TreeSet;
  * risk.  This code and its internal interfaces are subject to change
  * or deletion without notice.</b></p>
  */
-public record ProgramDescriptor(Path sourceFilePath, Optional<String> packageName, Path sourceRootPath) {
-    static ProgramDescriptor of(Path file) {
+public record ProgramDescriptor(ProgramFileObject fileObject, Optional<String> packageName, Path sourceRootPath) {
+    static ProgramDescriptor of(ProgramFileObject fileObject) throws Fault {
+        var file = fileObject.getFile();
         try {
             var compiler = JavacTool.create();
             var standardFileManager = compiler.getStandardFileManager(null, null, null);
-            var units = List.of(standardFileManager.getJavaFileObject(file));
+            var units = List.of(fileObject);
             var task = compiler.getTask(null, standardFileManager, diagnostic -> {}, null, null, units);
             for (var tree : task.parse()) {
                 var packageTree = tree.getPackage();
                 if (packageTree != null) {
                     var packageName = packageTree.getPackageName().toString();
                     var root = computeSourceRootPath(file, packageName);
-                    return new ProgramDescriptor(file, Optional.of(packageName), root);
+                    return new ProgramDescriptor(fileObject, Optional.of(packageName), root);
                 }
             }
-        } catch (Exception ignore) {
-            // fall through
+        } catch (IOException ignore) {
+            // fall through to let actual compilation determine the error message
         }
         var root = computeSourceRootPath(file, "");
-        return new ProgramDescriptor(file, Optional.empty(), root);
+        return new ProgramDescriptor(fileObject, Optional.empty(), root);
     }
 
     public static Path computeSourceRootPath(Path program, String packageName) {
         var absolute = program.normalize().toAbsolutePath();
         var absoluteRoot = absolute.getRoot();
+        assert absoluteRoot != null;
+        // unnamed package "": program's directory is the root path
         if (packageName.isEmpty()) {
             var parent = absolute.getParent();
             if (parent == null) return absoluteRoot;
             return parent;
         }
+        // named package "a.b.c": ensure end of path to program is "a/b/c"
         var packagePath = Path.of(packageName.replace('.', '/'));
         var ending = packagePath.resolve(program.getFileName());
         if (absolute.endsWith(ending)) {
@@ -80,7 +86,7 @@ public record ProgramDescriptor(Path sourceFilePath, Optional<String> packageNam
             if (max == 0) return absoluteRoot;
             return absoluteRoot.resolve(absolute.subpath(0, max));
         }
-        throw new RuntimeException("Package " + packageName + " does match path ending: " + ending);
+        throw new Fault(Errors.MismatchEndOfPathAndPackageName(packageName, program));
     }
 
     public boolean isModular() {

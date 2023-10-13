@@ -64,7 +64,6 @@ import java.util.concurrent.atomic.AtomicReference;
 final class MemoryContext {
     private final PrintWriter out;
     private final ProgramDescriptor descriptor;
-    private final ProgramFileObject program; // "/path/to/a/b/c/Program.java" <- package a.b.c;
 
     private final RelevantJavacOptions options;
 
@@ -77,13 +76,12 @@ final class MemoryContext {
     MemoryContext(PrintWriter out, ProgramDescriptor descriptor, RelevantJavacOptions options) throws Fault {
         this.out = out;
         this.descriptor = descriptor;
-        this.program = ProgramFileObject.of(descriptor.sourceFilePath());
         this.options = options;
 
         this.compiler = JavacTool.create();
         this.standardFileManager = compiler.getStandardFileManager(null, null, null);
         try {
-            List<File> searchPath = program.isFirstLineIgnored() ? List.of() : List.of(descriptor.sourceRootPath().toFile());
+            List<File> searchPath = descriptor.fileObject().isFirstLineIgnored() ? List.of() : List.of(descriptor.sourceRootPath().toFile());
             standardFileManager.setLocation(StandardLocation.SOURCE_PATH, searchPath);
         } catch (IOException e) {
             throw new Error("unexpected exception from file manager", e);
@@ -92,7 +90,7 @@ final class MemoryContext {
     }
 
     String getSourceFileAsString() {
-        return program.getFile().toAbsolutePath().toString();
+        return descriptor.fileObject().getFile().toAbsolutePath().toString();
     }
 
     Set<String> getNamesOfCompiledClasses() {
@@ -109,14 +107,14 @@ final class MemoryContext {
      */
     String compileProgram() throws Fault {
         var units = new ArrayList<JavaFileObject>();
-        units.add(program);
+        units.add(descriptor.fileObject());
         if (descriptor.isModular()) {
             var root = descriptor.sourceRootPath();
             units.add(standardFileManager.getJavaFileObject(root.resolve("module-info.java")));
         }
         var opts = options.forProgramCompilation();
         var task = compiler.getTask(out, memoryFileManager, null, opts, null, units);
-        var fileUri = program.toUri();
+        var fileUri = descriptor.fileObject().toUri();
         var mainClassNameReference = new AtomicReference<String>();
         task.addTaskListener(new TaskListener() {
             @Override
