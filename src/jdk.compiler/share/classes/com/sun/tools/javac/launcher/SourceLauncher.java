@@ -197,7 +197,7 @@ public final class SourceLauncher {
 
         Class<?> appClass;
         try {
-            appClass = context.loadMainClass(parentLoader, mainClassName);
+            appClass = context.loadApplicationClass(parentLoader, mainClassName);
         } catch (ClassNotFoundException e) {
             throw new Fault(Errors.CantFindClass(mainClassName));
         }

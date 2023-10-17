@@ -28,6 +28,7 @@ package com.sun.tools.javac.launcher;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.resources.LauncherProperties.Errors;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -100,8 +101,7 @@ public record ProgramDescriptor(ProgramFileObject fileObject, Optional<String> p
                   .map(sourceRootPath::relativize)
                   .map(Path::toString)
                   .filter(string -> !string.isEmpty())
-                  .map(string -> string.replace('/', '.'))
-                  .map(string -> string.replace('\\', '.'))
+                  .map(string -> string.replace(File.separatorChar, '.'))
                   .forEach(names::add);
             return names;
         } catch (IOException exception) {
