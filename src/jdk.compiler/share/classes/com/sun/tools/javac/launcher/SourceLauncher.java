@@ -197,12 +197,12 @@ public final class SourceLauncher {
         ClassLoader parentLoader = ClassLoader.getSystemClassLoader();
 
         // 1. Find a main method in the first class and if there is one - invoke it
-        String mainClassName = topLevelClassNames.getFirst();
         Class<?> firstClass;
+        String firstClassName = topLevelClassNames.getFirst();
         try {
-            firstClass = context.loadApplicationClass(parentLoader, mainClassName);
+            firstClass = context.loadApplicationClass(parentLoader, firstClassName);
         } catch (ClassNotFoundException e) {
-            throw new Fault(Errors.CantFindClass(mainClassName));
+            throw new Fault(Errors.CantFindClass(firstClassName));
         }
 
         Method mainMethod = null;
@@ -235,9 +235,13 @@ public final class SourceLauncher {
                 }
             }
             if (mainMethod == null) {
-                throw new Fault(Errors.CantFindMainMethod(mainClassName));
+                throw new Fault(Errors.CantFindMainMethod(firstClassName));
             }
         }
+
+        // selected main method instance points back to its declaring class
+        Class<?> mainClass = mainMethod.getDeclaringClass();
+        String mainClassName = mainClass.getName();
 
         int mods = mainMethod.getModifiers();
         boolean isStatic = Modifier.isStatic(mods);
@@ -257,7 +261,7 @@ public final class SourceLauncher {
         if (!isStatic) {
             Constructor<?> constructor;
             try {
-                constructor = firstClass.getDeclaredConstructor();
+                constructor = mainClass.getDeclaredConstructor();
             } catch (NoSuchMethodException e) {
                 throw new Fault(Errors.CantFindConstructor(mainClassName));
             }
@@ -274,7 +278,7 @@ public final class SourceLauncher {
             // Similar to sun.launcher.LauncherHelper#executeMainClass
             // but duplicated here to prevent additional launcher frames
             mainMethod.setAccessible(true);
-            Object receiver = isStatic ? firstClass : instance;
+            Object receiver = isStatic ? mainClass : instance;
 
             if (noArgs) {
                 mainMethod.invoke(receiver);
@@ -292,6 +296,6 @@ public final class SourceLauncher {
             throw e;
         }
 
-        return firstClass;
+        return mainClass;
     }
 }
