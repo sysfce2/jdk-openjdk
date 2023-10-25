@@ -39,6 +39,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.List;
 
 import jdk.internal.misc.MainMethodFinder;
 import jdk.internal.misc.PreviewFeatures;
@@ -147,10 +148,10 @@ public final class SourceLauncher {
         ProgramDescriptor program = ProgramDescriptor.of(ProgramFileObject.of(file));
         RelevantJavacOptions options = RelevantJavacOptions.of(program, runtimeArgs);
         MemoryContext context = new MemoryContext(out, program, options);
-        String mainClassName = context.compileProgram();
+        List<String> names = context.compileProgram();
 
         String[] mainArgs = Arrays.copyOfRange(args, 1, args.length);
-        var appClass = execute(mainClassName, mainArgs, context);
+        var appClass = execute(names, mainArgs, context);
 
         return new Result(appClass, context.getNamesOfCompiledClasses());
     }
@@ -181,33 +182,61 @@ public final class SourceLauncher {
     }
 
     /**
-     * Invokes the {@code main} method of a specified class, using a class loader that
+     * Invokes the {@code main} method of a program class, using a class loader that
      * will load recently compiled classes from memory.
      *
-     * @param mainClassName the class to be executed
+     * @param topLevelClassNames the names of classes in the program compilation unit
      * @param mainArgs the arguments for the {@code main} method
      * @param context the context for the class to be executed
      * @throws Fault if there is a problem finding or invoking the {@code main} method
      * @throws InvocationTargetException if the {@code main} method throws an exception
      */
-    private Class<?> execute(String mainClassName, String[] mainArgs, MemoryContext context)
+    private Class<?> execute(List<String> topLevelClassNames, String[] mainArgs, MemoryContext context)
             throws Fault, InvocationTargetException {
         System.setProperty("jdk.launcher.sourcefile", context.getSourceFileAsString());
         ClassLoader parentLoader = ClassLoader.getSystemClassLoader();
 
-        Class<?> appClass;
+        // 1. Find a main method in the first class and if there is one - invoke it
+        String mainClassName = topLevelClassNames.getFirst();
+        Class<?> firstClass;
         try {
-            appClass = context.loadApplicationClass(parentLoader, mainClassName);
+            firstClass = context.loadApplicationClass(parentLoader, mainClassName);
         } catch (ClassNotFoundException e) {
             throw new Fault(Errors.CantFindClass(mainClassName));
         }
 
-        Method mainMethod;
+        Method mainMethod = null;
         try {
-            mainMethod = MainMethodFinder.findMainMethod(appClass);
-            // mainMethod = appClass.getMethod("main", String[].class);
+            mainMethod = MainMethodFinder.findMainMethod(firstClass);
         } catch (NoSuchMethodException e) {
-            throw new Fault(Errors.CantFindMainMethod(mainClassName));
+            // 2. If the first class doesn't have a main method, look for a top-level public class
+            var compilationUnitName = context.getProgramDescriptor().fileObject().getFile().getFileName().toString();
+            assert compilationUnitName.endsWith(".java");
+            var expectedPublicName = compilationUnitName.substring(0, compilationUnitName.length() - 5);
+            for (var name : topLevelClassNames) {
+                Class<?> nextClass;
+                try {
+                    nextClass = Class.forName(name, true, firstClass.getClassLoader());
+                }  catch (ClassNotFoundException ignore) {
+                    throw new Fault(Errors.CantFindClass(name));
+                }
+                if (Modifier.isPublic(nextClass.getModifiers())) {
+                    // 3. If there's a top-level public class and doesn't match the name - fail
+                    if (!nextClass.getName().equals(expectedPublicName)) {
+                        throw new Fault(Errors.CantFindClass(expectedPublicName));
+                    }
+                    // 4. If the top-level public class has a main method - invoke it
+                    try {
+                        mainMethod = MainMethodFinder.findMainMethod(nextClass);
+                        break;
+                    } catch (NoSuchMethodException ignore) {
+                        // continue with next class
+                    }
+                }
+            }
+            if (mainMethod == null) {
+                throw new Fault(Errors.CantFindMainMethod(mainClassName));
+            }
         }
 
         int mods = mainMethod.getModifiers();
@@ -228,7 +257,7 @@ public final class SourceLauncher {
         if (!isStatic) {
             Constructor<?> constructor;
             try {
-                constructor = appClass.getDeclaredConstructor();
+                constructor = firstClass.getDeclaredConstructor();
             } catch (NoSuchMethodException e) {
                 throw new Fault(Errors.CantFindConstructor(mainClassName));
             }
@@ -245,7 +274,7 @@ public final class SourceLauncher {
             // Similar to sun.launcher.LauncherHelper#executeMainClass
             // but duplicated here to prevent additional launcher frames
             mainMethod.setAccessible(true);
-            Object receiver = isStatic ? appClass : instance;
+            Object receiver = isStatic ? firstClass : instance;
 
             if (noArgs) {
                 mainMethod.invoke(receiver);
@@ -263,6 +292,6 @@ public final class SourceLauncher {
             throw e;
         }
 
-        return appClass;
+        return firstClass;
     }
 }

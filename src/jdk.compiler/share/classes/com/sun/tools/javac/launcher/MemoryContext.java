@@ -31,6 +31,7 @@ import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.resources.LauncherProperties.Errors;
 
+import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.TypeElement;
 import javax.tools.JavaFileManager;
@@ -52,7 +53,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * An object to encapsulate the set of in-memory classes, such that
@@ -92,6 +92,10 @@ final class MemoryContext {
         this.memoryFileManager = new MemoryFileManager(inMemoryClasses, standardFileManager);
     }
 
+    ProgramDescriptor getProgramDescriptor() {
+        return descriptor;
+    }
+
     String getSourceFileAsString() {
         return descriptor.fileObject().getFile().toAbsolutePath().toString();
     }
@@ -105,10 +109,10 @@ final class MemoryContext {
      * Any messages generated during compilation will be written to the stream
      * provided when this object was created.
      *
-     * @return the name of the first class found in the source file
+     * @return the list of top-level types defined in the source file
      * @throws Fault if any compilation errors occur, or if no class was found
      */
-    String compileProgram() throws Fault {
+    List<String> compileProgram() throws Fault {
         var units = new ArrayList<JavaFileObject>();
         units.add(descriptor.fileObject());
         if (descriptor.isModular()) {
@@ -118,31 +122,36 @@ final class MemoryContext {
         var opts = options.forProgramCompilation();
         var task = compiler.getTask(out, memoryFileManager, null, opts, null, units);
         var fileUri = descriptor.fileObject().toUri();
-        var mainClassNameReference = new AtomicReference<String>();
+        var names = new ArrayList<String>();
         task.addTaskListener(new TaskListener() {
             @Override
             public void started(TaskEvent event) {
-                if (mainClassNameReference.get() != null) return;
                 if (event.getKind() != TaskEvent.Kind.ANALYZE) return;
                 TypeElement element = event.getTypeElement();
                 if (element.getNestingKind() != NestingKind.TOP_LEVEL) return;
                 JavaFileObject source = event.getSourceFile();
                 if (source == null) return;
                 if (!source.toUri().equals(fileUri)) return;
-                var mainClassName = element.isUnnamed()
+                ElementKind kind = element.getKind();
+                if (kind != ElementKind.CLASS
+                        && kind != ElementKind.ENUM
+                        && kind != ElementKind.INTERFACE
+                        && kind != ElementKind.RECORD)
+                    return;
+                var name = element.isUnnamed()
                         ? element.getSimpleName().toString()
                         : element.getQualifiedName().toString();
-                mainClassNameReference.compareAndSet(null, mainClassName);
+                names.add(name);
             }
         });
         var ok = task.call();
         if (!ok) {
             throw new Fault(Errors.CompilationFailed);
         }
-        if (mainClassNameReference.get() == null) {
+        if (names.isEmpty()) {
             throw new Fault(Errors.NoClass);
         }
-        return mainClassNameReference.get();
+        return List.copyOf(names);
     }
 
     /**

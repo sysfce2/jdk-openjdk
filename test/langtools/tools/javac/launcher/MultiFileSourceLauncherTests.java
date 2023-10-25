@@ -249,14 +249,14 @@ class MultiFileSourceLauncherTests {
     void classesDeclaredInSameFileArePreferredToClassesInOtherFiles(@TempDir Path base) throws Exception {
         var prog = Files.writeString(base.resolve("Prog.java"),
                 """
-                class Prog {
-                  public static void main(String... args) {
-                    Helper.run();
-                  }
-                }
                 class Helper {
                   static void run() {
                     System.out.println("Same file.");
+                  }
+                }
+                public class Prog {
+                  public static void main(String... args) {
+                    Helper.run();
                   }
                 }
                 """);
